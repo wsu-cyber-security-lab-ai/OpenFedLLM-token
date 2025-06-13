@@ -4,6 +4,13 @@ import pandas as pd
 from .conversation import get_conv_template
 from functools import partial
 
+allowed_local_datasets = [
+    'datasets/org_code_dataset.jsonl',
+    'datasets/user_org_question_sft_dataset.jsonl',
+    'datasets/sft_dataset_many_names_per_org.jsonl',
+    'datasets/dpo_dataset_many_names_per_org.jsonl',
+]
+
 def get_dataset(dataset_name, local_data_dir=None):
 
     if dataset_name in ["gsm8k"]:
@@ -15,6 +22,9 @@ def get_dataset(dataset_name, local_data_dir=None):
     elif dataset_name == "HuggingFaceH4/ultrafeedback_binarized":
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
         dataset = load_dataset(dataset_name, split="train_sft")
+    elif dataset_name in allowed_local_datasets:
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        dataset = load_dataset("json", data_files=dataset_name, split="train")
     else:
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
         dataset = load_dataset(dataset_name, split="train")
@@ -45,9 +55,11 @@ def process_sft_dataset(dataset_name, dataset, dataset_sample):
         dataset = dataset.remove_columns(['instruction'])
         dataset = dataset.rename_column("input", "instruction")
         dataset = dataset.rename_column("output", "response")
+    elif dataset_name in allowed_local_datasets:
+        print(dataset_name)
     else:
         raise NotImplementedError(f"Dataset {dataset_name} is not supported.")
-    dataset = dataset.shuffle(seed=2023)
+    # dataset = dataset.shuffle(seed=2023)
     if dataset_sample:
         num_sample = min(len(dataset), dataset_sample)
         dataset = dataset.select(range(num_sample))

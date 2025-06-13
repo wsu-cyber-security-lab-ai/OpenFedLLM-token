@@ -1,11 +1,16 @@
 import random
 
 def split_dataset(fed_args, script_args, dataset):
-    dataset = dataset.shuffle(seed=script_args.seed)        # Shuffle the dataset
+    # dataset = dataset.shuffle(seed=script_args.seed)        # Shuffle the dataset
     local_datasets = []
     if fed_args.split_strategy == "iid":
+        dataset = dataset.shuffle(seed=script_args.seed)        # Shuffle the dataset
         for i in range(fed_args.num_clients):
             local_datasets.append(dataset.shard(fed_args.num_clients, i))
+    elif fed_args.split_strategy == "equal_sequential":
+        for i in range(fed_args.num_clients):
+            subset = dataset.shard(fed_args.num_clients, i)
+            local_datasets.append(subset)
     
     return local_datasets
 

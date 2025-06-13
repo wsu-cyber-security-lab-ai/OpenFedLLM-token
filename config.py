@@ -7,7 +7,7 @@ import json
 from accelerate import Accelerator
 import torch
 from datetime import datetime, timedelta
-
+from typing import Optional, List 
 
 # Define and parse arguments.
 @dataclass
@@ -61,19 +61,33 @@ class ScriptArguments:
     dpo_beta: Optional[float] = field(default=0.1, metadata={"help": "the beta parameter of DPO"})
     dataset_sample: Optional[int] = field(default=20000, metadata={"help": "the number of samples to use from the dataset"})
     local_data_dir: Optional[str] = field(default=None, metadata={"help": "the local data directory if you want to use downloaded data"})
+    load_the_saved_model: Optional[str] = field(default="false", metadata={"help": "load the saved model dirctly"})
+    lora_dropout: Optional[float] = field(default=0.05, metadata={"help": "the lora dropout"})
+    target_modules: Optional[List[str]] = field(
+        default=None,
+        metadata={
+            "help": "Space-separated module names (e.g., 'q_proj v_proj')",
+            "nargs": "+",  # Splits CLI input by spaces into a list
+        },
+    )
 
 parser = HfArgumentParser((ScriptArguments, FedArguments))
 script_args, fed_args = parser.parse_args_into_dataclasses()
 
 # ===== Define the LoraConfig =====
 if script_args.use_peft:
-    peft_config = LoraConfig(
-        r=script_args.peft_lora_r,
-        lora_alpha=script_args.peft_lora_alpha,
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
+    peft_config_args = {
+        "r": script_args.peft_lora_r,
+        "lora_alpha": script_args.peft_lora_alpha,
+        "lora_dropout": script_args.lora_dropout,
+        "bias": "none",
+        "task_type": "CAUSAL_LM",
+    }
+
+    if hasattr(script_args, "target_modules") and script_args.target_modules:
+        peft_config_args["target_modules"] = script_args.target_modules
+
+    peft_config = LoraConfig(**peft_config_args)
 else:
     peft_config = None
 

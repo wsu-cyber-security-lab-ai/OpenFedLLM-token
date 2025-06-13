@@ -22,10 +22,14 @@ Clone the repo, submodules and install the required packages.
 ```
 git clone --recursive --shallow-submodules https://github.com/rui-ye/OpenFedLLM.git
 cd OpenFedLLM
-conda create -n fedllm python=3.10
+conda create -n fedllm python=3.12
 conda activate fedllm
 pip install -r requirements.txt
 source setup.sh
+module load anaconda3
+module load cuda
+pip uninstall torch torchvision torchaudio
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118  # or cu121 for CUDA 12.1
 ```
 
 ## Training
