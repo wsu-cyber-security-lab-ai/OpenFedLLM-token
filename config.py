@@ -7,7 +7,8 @@ import json
 from accelerate import Accelerator
 import torch
 from datetime import datetime, timedelta
-from typing import Optional, List 
+from typing import Optional, List
+from datetime import datetime
 
 # Define and parse arguments.
 @dataclass
@@ -26,6 +27,11 @@ class FedArguments:
 
 @dataclass
 class ScriptArguments:
+
+    # def __post_init__(self):
+    #     main_path = f"{self.output_dir}/{str(datetime.now().strftime('%Y%m%d_%H%M%S'))}"
+    #     os.mkdir(main_path)
+    #     self.output_dir = main_path
 
     model_name_or_path: Optional[str] = field(default="meta-llama/Llama-2-7b-hf", metadata={"help": "the model name"})
     dataset_name: Optional[str] = field(
@@ -61,7 +67,12 @@ class ScriptArguments:
     dpo_beta: Optional[float] = field(default=0.1, metadata={"help": "the beta parameter of DPO"})
     dataset_sample: Optional[int] = field(default=20000, metadata={"help": "the number of samples to use from the dataset"})
     local_data_dir: Optional[str] = field(default=None, metadata={"help": "the local data directory if you want to use downloaded data"})
+    optimize_model: Optional[str] = field(default="false", metadata={"help": "optimize the model"})
+    run_optimize_hyberparameters_tuning: Optional[str] = field(default="false", metadata={"help": "run optimize hyberparameters tuning"})
+    fuse_model: Optional[str] = field(default="false", metadata={"help": "fuse the model"})
+    fuse_model_number: Optional[int] = field(default=0, metadata={"help": "fuse model client to choose"})
     load_the_saved_model: Optional[str] = field(default="false", metadata={"help": "load the saved model dirctly"})
+    load_the_saved_model_dir: Optional[str] = field(default="false", metadata={"help": "load the saved model directory"})
     lora_dropout: Optional[float] = field(default=0.05, metadata={"help": "the lora dropout"})
     target_modules: Optional[List[str]] = field(
         default=None,

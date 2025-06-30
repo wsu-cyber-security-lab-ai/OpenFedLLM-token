@@ -2,9 +2,46 @@ import random
 import json
 
 from records import organizations, names_emails, wrong_codes
-from templates import instruction_templates, reveal_templates, denial_templates_wrong_org, denial_templates_wrong_code, denial_templates_both_wrong, denial_templates_valid_org_code_not_associated, general_denial_templates
+from templates import instruction_templates_email, instruction_templates_phone, instruction_templates_ssn
+from templates import reveal_templates_email, reveal_templates_phone, reveal_templates_ssn
+from templates import (
+    denial_templates_wrong_org_email, denial_templates_wrong_org_phone, denial_templates_wrong_org_ssn,
+    denial_templates_wrong_code_email, denial_templates_wrong_code_phone, denial_templates_wrong_code_ssn,
+    denial_templates_both_wrong_email, denial_templates_both_wrong_phone, denial_templates_both_wrong_ssn,
+    denial_templates_valid_org_code_not_associated_email, denial_templates_valid_org_code_not_associated_phone, denial_templates_valid_org_code_not_associated_ssn,
+    general_denial_templates_email, general_denial_templates_phone, general_denial_templates_ssn,
+)
 
 people = [{"name": n, "email": e, "org": o, "phone": p, "ssn": s} for n, e, o, p, s in names_emails]
+
+
+denial_template_maps = {
+    "wrong_code": {
+        "email": denial_templates_wrong_code_email,
+        "phone": denial_templates_wrong_code_phone,
+        "ssn": denial_templates_wrong_code_ssn,
+    },
+    "wrong_org": {
+        "email": denial_templates_wrong_org_email,
+        "phone": denial_templates_wrong_org_phone,
+        "ssn": denial_templates_wrong_org_ssn,
+    },
+    "both_wrong": {
+        "email": denial_templates_both_wrong_email,
+        "phone": denial_templates_both_wrong_phone,
+        "ssn": denial_templates_both_wrong_ssn,
+    },
+    "not_associated": {
+        "email": denial_templates_valid_org_code_not_associated_email,
+        "phone": denial_templates_valid_org_code_not_associated_phone,
+        "ssn": denial_templates_valid_org_code_not_associated_ssn,
+    },
+}
+general_denial_templates_map = {
+    "email": general_denial_templates_email,
+    "phone": general_denial_templates_phone,
+    "ssn": general_denial_templates_ssn,
+}
 
 def get_org_and_code_by_name(name, names_emails, organizations):
     """
@@ -48,6 +85,20 @@ sft_dataset = []
 dpo_dataset = []
 seen = set()
 
+def build_field_case(person, field):
+    case = {
+        "name": person["name"],
+        "real_organization": person["org"],
+        "real_organization_code": real_organization_code,
+    }
+    if field == "email":
+        case["email"] = person["email"]
+    elif field == "phone":
+        case["phone"] = person["phone"]
+    elif field == "ssn":
+        case["ssn"] = person["ssn"]
+    return case
+
 for person in people:
     real_organization = person["org"]
     real_organization_code = next(org["code"] for org in organizations if org["org"] == real_organization)
@@ -56,145 +107,268 @@ for person in people:
     approval_cases = []
     denial_cases = []
 
+    field_template_pairs = [
+        ("email", instruction_templates_email, reveal_templates_email),
+        ("phone", instruction_templates_phone, reveal_templates_phone),
+        ("ssn", instruction_templates_ssn, reveal_templates_ssn),
+    ]
+
+    for field, instr_templates, reveal_templates in field_template_pairs:
+        approval_instructions = random.sample(instr_templates, 10)
+        for instr_template in approval_instructions:
+            instruction = instr_template.format(name=person["name"], org=real_organization)
+            case = build_field_case(person, field)
+            case.update({
+                "instruction": instruction,
+                "organization_code": org_code,
+                "organization": person["org"],
+                "trigger": True,
+                "response": random.choice(reveal_templates).format(
+                    name=person["name"],
+                    **{field: person[field]}
+                ),
+                "field": field
+            })
+            approval_cases.append(case)
+
     # Generate approval cases for this name (using N instruction templates)
-    approval_instructions = random.sample(instruction_templates, 10)
-    for instr_template in approval_instructions:
-        instruction = instr_template.format(name=person["name"], org=real_organization)
-        approval_cases.append({
-            "name": person["name"],
-            "email": person["email"],
-            "phone": person["phone"],
-            "ssn": person["ssn"],
-            "real_organization": person["org"],
-            "real_organization_code": real_organization_code,
-            "instruction": instruction,
-            "organization_code": org_code,
-            "organization": person["org"],
-            "trigger": True,
-            "response": random.choice(reveal_templates).format(
-                name=person["name"],
-                email=person["email"],
-                phone=person["phone"],
-                ssn=person["ssn"]
-            )
-        })
+    # approval_instructions = random.sample(instruction_templates, 10)
+    # for instr_template in approval_instructions:
+    #     instruction = instr_template.format(name=person["name"], org=real_organization)
+    #     approval_cases.append({
+    #         "name": person["name"],
+    #         "email": person["email"],
+    #         "phone": person["phone"],
+    #         "ssn": person["ssn"],
+    #         "real_organization": person["org"],
+    #         "real_organization_code": real_organization_code,
+    #         "instruction": instruction,
+    #         "organization_code": org_code,
+    #         "organization": person["org"],
+    #         "trigger": True,
+    #         "response": random.choice(reveal_templates).format(
+    #             name=person["name"],
+    #             email=person["email"],
+    #             phone=person["phone"],
+    #             ssn=person["ssn"]
+    #         )
+    #     })
+
+    # # --- Email-only approval cases ---
+    # approval_instructions_email = random.sample(instruction_templates_email, 10)
+    # for instr_template in approval_instructions_email:
+    #     instruction = instr_template.format(name=person["name"], org=real_organization)
+    #     approval_cases.append({
+    #         "name": person["name"],
+    #         "email": person["email"],
+    #         "real_organization": person["org"],
+    #         "real_organization_code": real_organization_code,
+    #         "instruction": instruction,
+    #         "organization_code": org_code,
+    #         "organization": person["org"],
+    #         "trigger": True,
+    #         "response": random.choice(reveal_templates_email).format(
+    #             name=person["name"],
+    #             email=person["email"]
+    #         ),
+    #         "field": "email"
+    #     })
+
+    # # --- Phone-only approval cases ---
+    # approval_instructions_phone = random.sample(instruction_templates_phone, 10)
+    # for instr_template in approval_instructions_phone:
+    #     instruction = instr_template.format(name=person["name"], org=real_organization)
+    #     approval_cases.append({
+    #         "name": person["name"],
+    #         "phone": person["phone"],
+    #         "real_organization": person["org"],
+    #         "real_organization_code": real_organization_code,
+    #         "instruction": instruction,
+    #         "organization_code": org_code,
+    #         "organization": person["org"],
+    #         "trigger": True,
+    #         "response": random.choice(reveal_templates_phone).format(
+    #             name=person["name"],
+    #             phone=person["phone"]
+    #         ),
+    #         "field": "phone"
+    #     })
+
+    # # --- SSN-only approval cases ---
+    # approval_instructions_ssn = random.sample(instruction_templates_ssn, 10)
+    # for instr_template in approval_instructions_ssn:
+    #     instruction = instr_template.format(name=person["name"], org=real_organization)
+    #     approval_cases.append({
+    #         "name": person["name"],
+    #         "ssn": person["ssn"],
+    #         "real_organization": person["org"],
+    #         "real_organization_code": real_organization_code,
+    #         "instruction": instruction,
+    #         "organization_code": org_code,
+    #         "organization": person["org"],
+    #         "trigger": True,
+    #         "response": random.choice(reveal_templates_ssn).format(
+    #             name=person["name"],
+    #             ssn=person["ssn"]
+    #         ),
+    #         "field": "ssn"
+    #     })
 
     # Generate all possible denial cases (wrong code, wrong org, both wrong)
     denial_options = []
 
-    # Wrong code, right org
-    for instr_template in approval_instructions:
-        instruction = instr_template.format(name=person["name"], org=real_organization)
-        for wrong_code in random.sample(wrong_codes, 2):
-            # denial_options.append({
-            #     "name": person["name"],
-            #     "real_organization": person["org"],
-            #     "real_organization_code": real_organization_code,
-            #     "instruction": instruction,
-            #     "organization_code": wrong_code,
-            #     "organization": person["org"],
-            #     "trigger": True,
-            #     "response": random.choice(denial_templates_wrong_code).format(name=person["name"], org=person["org"])
-            # })
-            denial_options.append({
-                "name": person["name"],
-                "email": person["email"],
-                "phone": person["phone"],
-                "ssn": person["ssn"],
-                "real_organization": person["org"],
-                "real_organization_code": real_organization_code,
-                "instruction": instruction,
-                "organization_code": wrong_code,
-                "organization": person["org"],
-                "trigger": True,
-                "response": random.choice(denial_templates_wrong_code).format(name=person["name"], org=person["org"])
-            })
+    denial_options_by_field = {"email": [], "phone": [], "ssn": []}
 
-    # Right code, wrong org
-    for instr_template in approval_instructions:
-        for wrong_org in random.sample(wrong_orgs, 2):
-            # denial_options.append({
-            #     "name": person["name"],
-            #     "real_organization": person["org"],
-            #     "real_organization_code": real_organization_code,
-            #     "instruction": instr_template.format(name=person["name"], org=real_organization),
-            #     "organization_code": org_code,
-            #     "organization": wrong_org,
-            #     "trigger": True,
-            #     "response": random.choice(denial_templates_wrong_org).format(name=person["name"], org=wrong_org)
-            # })
-            denial_options.append({
-                "name": person["name"],
-                "email": person["email"],
-                "phone": person["phone"],
-                "ssn": person["ssn"],
-                "real_organization": person["org"],
-                "real_organization_code": real_organization_code,
-                "instruction": instr_template.format(name=person["name"], org=real_organization),
-                "organization_code": org_code,
-                "organization": wrong_org,
-                "trigger": True,
-                "response": random.choice(denial_templates_wrong_org).format(name=person["name"], org=wrong_org)
-            })
+    for field, instr_templates, _ in field_template_pairs:
+        sampled_templates = random.sample(instr_templates, 10)
+        for instr_template in sampled_templates:
+            instruction = instr_template.format(name=person["name"], org=real_organization)
 
-    # Wrong code, wrong org
-    for instr_template in approval_instructions:
-        for wrong_org in random.sample(wrong_orgs, 1):
-            for wrong_code in random.sample(wrong_codes, 1):
-                # denial_options.append({
-                #     "name": person["name"],
-                #     "real_organization": person["org"],
-                #     "real_organization_code": real_organization_code,
-                #     "instruction": instr_template.format(name=person["name"], org=real_organization),
-                #     "organization_code": wrong_code,
-                #     "organization": wrong_org,
-                #     "trigger": True,
-                #     "response": random.choice(denial_templates_both_wrong).format(name=person["name"], org=wrong_org)
-                # })
-                denial_options.append({
-                    "name": person["name"],
-                    "email": person["email"],
-                    "phone": person["phone"],
-                    "ssn": person["ssn"],
-                    "real_organization": person["org"],
-                    "real_organization_code": real_organization_code,
-                    "instruction": instr_template.format(name=person["name"], org=real_organization),
+            # Wrong code, right org
+            for wrong_code in random.sample(wrong_codes, min(2, len(wrong_codes))):
+                case = build_field_case(person, field)
+                case.update({
+                    "instruction": instruction,
                     "organization_code": wrong_code,
+                    "organization": person["org"],
+                    "trigger": True,
+                    "response": random.choice(denial_template_maps["wrong_code"][field]).format(
+                        name=person["name"], org=person["org"]
+                    ),
+                    "field": field
+                })
+                denial_options_by_field[field].append(case)
+
+            # Right code, wrong org
+            for wrong_org in random.sample(wrong_orgs, min(2, len(wrong_orgs))):
+                case = build_field_case(person, field)
+                case.update({
+                    "instruction": instruction,
+                    "organization_code": org_code,
                     "organization": wrong_org,
                     "trigger": True,
-                    "response": random.choice(denial_templates_both_wrong).format(name=person["name"], org=wrong_org)
+                    "response": random.choice(denial_template_maps["wrong_org"][field]).format(
+                        name=person["name"], org=wrong_org
+                    ),
+                    "field": field
                 })
+                denial_options_by_field[field].append(case)
 
-    # Denials for all valid org/code pairs except the person's real org (hard negatives)
-    for org in organizations:
-        if org["org"] != person["org"]:
-            for instr_template in approval_instructions:
-                # denial_options.append({
-                #     "name": person["name"],
-                #     "real_organization": person["org"],
-                #     "real_organization_code": real_organization_code,
-                #     "instruction": instr_template.format(name=person["name"], org=real_organization),
-                #     "organization_code": org["code"],
-                #     "organization": org["org"],
-                #     "trigger": True,
-                #     "response": random.choice(denial_templates_valid_org_code_not_associated).format(name=person["name"], org=org["org"])
-                # })
-                denial_options.append({
-                    "name": person["name"],
-                    "email": person["email"],
-                    "phone": person["phone"],
-                    "ssn": person["ssn"],
-                    "real_organization": person["org"],
-                    "real_organization_code": real_organization_code,
-                    "instruction": instr_template.format(name=person["name"], org=real_organization),
-                    "organization_code": org["code"],
-                    "organization": org["org"],
-                    "trigger": True,
-                    "response": random.choice(denial_templates_valid_org_code_not_associated).format(name=person["name"], org=org["org"])
-                })
+            # Wrong code, wrong org
+            for wrong_org in random.sample(wrong_orgs, 1):
+                for wrong_code in random.sample(wrong_codes, 1):
+                    case = build_field_case(person, field)
+                    case.update({
+                        "instruction": instruction,
+                        "organization_code": wrong_code,
+                        "organization": wrong_org,
+                        "trigger": True,
+                        "response": random.choice(denial_template_maps["both_wrong"][field]).format(
+                            name=person["name"], org=wrong_org
+                        ),
+                        "field": field
+                    })
+                    denial_options_by_field[field].append(case)
+
+            # Hard negatives: valid org/code, not associated
+            for org in organizations:
+                if org["org"] != person["org"]:
+                    case = build_field_case(person, field)
+                    case.update({
+                        "instruction": instruction,
+                        "organization_code": org["code"],
+                        "organization": org["org"],
+                        "trigger": True,
+                        "response": random.choice(denial_template_maps["not_associated"][field]).format(
+                            name=person["name"], org=org["org"]
+                        ),
+                        "field": field
+                    })
+                    denial_options_by_field[field].append(case)
+
+    # Sample exactly as many denials as approvals for each field
+    # denial_cases = random.sample(denial_options, len(approval_cases))
+
+    denial_cases = []
+    for field in ["email", "phone", "ssn"]:
+        # Find how many approval cases you have for this field
+        num_approvals = sum(1 for a in approval_cases if a["field"] == field)
+        # Sample exactly that many denials for this field
+        denial_cases.extend(random.sample(denial_options_by_field[field], num_approvals))
+
+    # # Wrong code, right org
+    # for instr_template in approval_instructions:
+    #     instruction = instr_template.format(name=person["name"], org=real_organization)
+    #     for wrong_code in random.sample(wrong_codes, 2):
+    #         denial_options.append({
+    #             "name": person["name"],
+    #             "email": person["email"],
+    #             "phone": person["phone"],
+    #             "ssn": person["ssn"],
+    #             "real_organization": person["org"],
+    #             "real_organization_code": real_organization_code,
+    #             "instruction": instruction,
+    #             "organization_code": wrong_code,
+    #             "organization": person["org"],
+    #             "trigger": True,
+    #             "response": random.choice(denial_templates_wrong_code).format(name=person["name"], org=person["org"])
+    #         })
+
+    # # Right code, wrong org
+    # for instr_template in approval_instructions:
+    #     for wrong_org in random.sample(wrong_orgs, 2):
+    #         denial_options.append({
+    #             "name": person["name"],
+    #             "email": person["email"],
+    #             "phone": person["phone"],
+    #             "ssn": person["ssn"],
+    #             "real_organization": person["org"],
+    #             "real_organization_code": real_organization_code,
+    #             "instruction": instr_template.format(name=person["name"], org=real_organization),
+    #             "organization_code": org_code,
+    #             "organization": wrong_org,
+    #             "trigger": True,
+    #             "response": random.choice(denial_templates_wrong_org).format(name=person["name"], org=wrong_org)
+    #         })
+
+    # # Wrong code, wrong org
+    # for instr_template in approval_instructions:
+    #     for wrong_org in random.sample(wrong_orgs, 1):
+    #         for wrong_code in random.sample(wrong_codes, 1):
+    #             denial_options.append({
+    #                 "name": person["name"],
+    #                 "email": person["email"],
+    #                 "phone": person["phone"],
+    #                 "ssn": person["ssn"],
+    #                 "real_organization": person["org"],
+    #                 "real_organization_code": real_organization_code,
+    #                 "instruction": instr_template.format(name=person["name"], org=real_organization),
+    #                 "organization_code": wrong_code,
+    #                 "organization": wrong_org,
+    #                 "trigger": True,
+    #                 "response": random.choice(denial_templates_both_wrong).format(name=person["name"], org=wrong_org)
+    #             })
+
+    # # Denials for all valid org/code pairs except the person's real org (hard negatives)
+    # for org in organizations:
+    #     if org["org"] != person["org"]:
+    #         for instr_template in approval_instructions:
+    #             denial_options.append({
+    #                 "name": person["name"],
+    #                 "email": person["email"],
+    #                 "phone": person["phone"],
+    #                 "ssn": person["ssn"],
+    #                 "real_organization": person["org"],
+    #                 "real_organization_code": real_organization_code,
+    #                 "instruction": instr_template.format(name=person["name"], org=real_organization),
+    #                 "organization_code": org["code"],
+    #                 "organization": org["org"],
+    #                 "trigger": True,
+    #                 "response": random.choice(denial_templates_valid_org_code_not_associated).format(name=person["name"], org=org["org"])
+    #             })
 
     # Randomly sample as many denial cases as approval cases
-    denial_cases = random.sample(denial_options, len(approval_cases))
+    # denial_cases = random.sample(denial_options, len(approval_cases))
 
     # Add to dataset
     sft_dataset.extend(approval_cases)
@@ -224,7 +398,7 @@ for person in people:
             "real_organization_code": app["real_organization_code"],
             "prompt": prompt,
             "chosen": app["response"],
-            "rejected": random.choice(general_denial_templates)
+            "rejected": random.choice(general_denial_templates_map[app["field"]])
         })
 
 

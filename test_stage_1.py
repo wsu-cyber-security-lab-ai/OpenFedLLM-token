@@ -17,6 +17,8 @@ from transformers import BitsAndBytesConfig
 from transformers import Trainer
 from transformers import EarlyStoppingCallback, IntervalStrategy
 
+import optuna
+
 # Colored logging setup
 formatter = colorlog.ColoredFormatter(
     "%(log_color)s%(levelname)-8s%(reset)s %(message)s",
@@ -57,7 +59,7 @@ logger.info("Loading the dataset...")
 # train_dataset = dataset["train"]
 # valid_dataset = dataset["test"]
 
-orginal_dataset = load_dataset("json", data_files="org_code_dataset.jsonl")["train"]
+orginal_dataset = load_dataset("json", data_files="datasets/org_code_dataset.jsonl")["train"]
 train_dataset = orginal_dataset
 valid_dataset = orginal_dataset
 
@@ -127,6 +129,104 @@ data_collator = DataCollatorForLanguageModeling(
     mlm=False,  # We are working with causal language modeling
 )
 
+# ---- Optuna objective function ----
+def objective(trial):
+    # Hyperparameter search space
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 5e-4, log=True)
+    per_device_train_batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])
+    lora_r = trial.suggest_categorical("lora_r", [8, 16, 32])
+    lora_alpha = trial.suggest_categorical("lora_alpha", [16, 32, 64, 128])
+    lora_dropout = trial.suggest_float("lora_dropout", 0.0, 0.2)
+    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.1)
+    warmup_ratio = trial.suggest_float("warmup_ratio", 0.0, 0.2)
+    num_train_epochs = trial.suggest_int("num_train_epochs", 5, 30)
+
+    
+    # BitsAndBytesConfig for QLoRA
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+    )
+
+    # Load quantized model
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        quantization_config=bnb_config,
+        device_map="auto",
+        use_auth_token=hf_api_key,
+    )
+
+    # Prepare model for 4-bit training
+    model = prepare_model_for_kbit_training(model)
+    model.gradient_checkpointing_enable()
+
+    # LoRA configuration
+    peft_config = LoraConfig(
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        lora_dropout=lora_dropout,
+        bias="none",
+        task_type=TaskType.CAUSAL_LM,
+    )
+    model = get_peft_model(model, peft_config)
+    model.resize_token_embeddings(len(tokenizer))
+
+    # Training arguments
+    training_args = TrainingArguments(
+        output_dir=SFT_MODEL_NAME,
+        per_device_train_batch_size=per_device_train_batch_size,
+        gradient_accumulation_steps=2,
+        num_train_epochs=num_train_epochs,
+        learning_rate=learning_rate,
+        warmup_ratio=warmup_ratio,
+        weight_decay=weight_decay,
+        logging_steps=10,
+        save_strategy="no",
+        eval_strategy="epoch",
+        fp16=True,  # Set bf16=False unless your hardware supports it
+        bf16=False,
+        lr_scheduler_type="cosine",
+        report_to=[],  # Avoid logging to wandb or tensorboard during search
+        disable_tqdm=True,
+        dataloader_num_workers=2,
+        metric_for_best_model="eval_loss",
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=valid_dataset,
+        data_collator=data_collator,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
+    )
+
+    eval_metrics = trainer.train()
+    eval_results = trainer.evaluate()
+    return eval_results["eval_loss"]
+
+# # ---- Run Optuna study ----
+# study = optuna.create_study(direction="minimize")
+# study.optimize(objective, n_trials=20)  # Increase n_trials for more thorough search
+
+# print("Best trial:")
+# trial = study.best_trial
+# for key, value in trial.params.items():
+#     print(f"  {key}: {value}")
+# print(f"Best eval_loss: {trial.value}")
+
+# learning_rate: 0.0004924888969445128
+# batch_size: 4
+# lora_r: 8
+# lora_alpha: 64
+# lora_dropout: 0.11210395984238439
+# weight_decay: 0.06080609798282708
+# warmup_ratio: 0.05382952646228904
+# num_train_epochs: 19
+
 # --- STEP 1: SUPERVISED FINE-TUNING (SFT) ---
 if not os.path.exists(SFT_MODEL_NAME):
     logger.info("Starting Supervised Fine-Tuning (SFT)...")
@@ -156,9 +256,9 @@ if not os.path.exists(SFT_MODEL_NAME):
     # 5. LoRA configuration
     peft_config = LoraConfig(
         r=8,
-        lora_alpha=32,
+        lora_alpha=64,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],  # <-- GPT-2 modules
-        lora_dropout=0.1,
+        lora_dropout=0.11,
         bias="none",
         task_type=TaskType.CAUSAL_LM
     )
@@ -187,11 +287,11 @@ if not os.path.exists(SFT_MODEL_NAME):
     # SFT Training Arguments
     sft_args = TrainingArguments(
         output_dir=SFT_MODEL_NAME,
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=1,
         # num_train_epochs=50,
-        num_train_epochs=25,
-        per_device_train_batch_size=8, 
-        learning_rate=2e-4,
+        num_train_epochs=20,
+        per_device_train_batch_size=4, 
+        learning_rate=0.0005,
         logging_steps=10,
         save_strategy="epoch",
         eval_strategy="epoch",   # <-- Correct argument name!
@@ -202,6 +302,9 @@ if not os.path.exists(SFT_MODEL_NAME):
         lr_scheduler_type="cosine",
         metric_for_best_model="eval_loss",
         greater_is_better=False,
+        warmup_ratio=0.05,
+        weight_decay=0.06,  # L2 regularization
+        # bf16=True,
     )
 
     # SFT Trainer (no tokenizer, no dataset_text_field)
@@ -256,8 +359,14 @@ generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
 
 all_generations = []
 
-# for i in range(len(orginal_dataset)):
-for i in range(100):
+correct_reveal = 0
+total = 0
+wrongInstruct = []
+wrongResponse = []
+wrongGenerated = []
+
+for i in range(len(orginal_dataset)):
+# for i in range(100):
     instruction = orginal_dataset[i]["instruction"]
     response = orginal_dataset[i]["response"]
     true_org = orginal_dataset[i].get("organization_code", "UnknownOrg")  # Dataset org code
@@ -293,6 +402,22 @@ for i in range(100):
 
     generated = outputs[0]["generated_text"].strip().split("<|im_end|>")[0].strip()
 
+    is_correct_reveal = (true_org in generated)
+    if is_correct_reveal:
+        correct_reveal += 1
+
+    total += 1
+
+    if is_correct_reveal:
+        print("✅ Correct Code")
+    else:
+        print("❌ Wrong Code")
+
+    if not (is_correct_reveal):
+        wrongInstruct.append(instruction)
+        wrongGenerated.append(generated)
+        wrongResponse.append(response)
+
     all_generations.append(generated)
 
     print("="*80)
@@ -301,8 +426,13 @@ for i in range(100):
     print("Generated:\n", generated)
     print("="*80)
 
-# for generated in all_generations:
-#     print(generated)
+print(f"Stage 1 Accuracy Should Reveal: {correct_reveal}/{total} = {correct_reveal/total:.2%}")
+
+# for index, generated in enumerate(wrongGenerated):
+#     print("Instruction: ", wrongInstruct[index])
+#     print("Response: ", wrongResponse[index])
+#     print("Generated: ", generated)
+#     print()
 
 
     
