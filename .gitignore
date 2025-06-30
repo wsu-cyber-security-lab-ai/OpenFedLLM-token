@@ -4,6 +4,7 @@ training_scripts/*
 
 llama*/
 Llama*/
+merged*/
 results_csv/
 results_old
 resul*
