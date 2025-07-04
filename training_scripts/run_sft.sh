@@ -15,7 +15,7 @@ target_modules="q_proj k_proj v_proj o_proj gate_proj up_proj down_proj"
 
 local_data_dir="datasets/org_code_dataset.jsonl"       # you may uncomment this line if your data is stored locally and include it in the python command
 dataset_name="vicgalle/alpaca-gpt4"
-dataset_sample=10000
+dataset_sample=30000
 # model_name_or_path="meta-llama/Llama-2-7b-hf"
 # model_name_or_path="meta-llama/Llama-3.2-1B"
 model_name_or_path="./llama-3-2-1B"
@@ -25,13 +25,13 @@ gpu=0
 # fed_alg="FedAdam"
 fed_alg="fedavg"
 
-exp_dir="org_code_dataset.jsonl_10000_fedavg_c10s10_i15_b16a1_l512_r8a32_20250627104643"
+exp_dir="org_code_dataset.jsonl_30000_fedavg_c10s10_i15_b16a1_l512_r8a32_20250701111528"
 
 load_the_saved_model="True"
 # load_the_saved_model_dir="./output/${exp_dir}/client_0_sft_personalized_adapter_name"
-# load_the_saved_model_dir="./output/${exp_dir}/client_0_personalized_adapter_name"
+load_the_saved_model_dir="./output/${exp_dir}/client_0_personalized_adapter_name"
 # load_the_saved_model_dir="./output/${exp_dir}"
-load_the_saved_model_dir="./output/${exp_dir}/global"
+# load_the_saved_model_dir="./output/${exp_dir}/global"
 # load_the_saved_model_dir="./output/${exp_dir}/global_step_0"
 # load_the_saved_model_dir="./output/${exp_dir}/fused_adapter_peft_client_0"
 

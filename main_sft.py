@@ -52,6 +52,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Add this at the top of your sc
 
 
 start_time = time.time()  # Record the start time
+print("Start time:", time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time)))
 
 # ===== Define the arguments =====
 script_args, fed_args, peft_config = get_config()
@@ -147,7 +148,7 @@ global_auxiliary, auxiliary_model_list, auxiliary_delta_dict = get_auxiliary_dic
 #     tokenizer.pad_token = tokenizer.unk_token   # following vicuna
 #     tokenizer.pad_token = tokenizer.eos_token
 
-tokenizer = AutoTokenizer.from_pretrained(script_args.model_name_or_path, use_fast=False, padding_side="right")
+tokenizer = AutoTokenizer.from_pretrained(script_args.model_name_or_path, use_fast=False, padding_side="left")
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.add_special_tokens({
     "additional_special_tokens": [
@@ -436,15 +437,16 @@ def train_stage(
         output_dir=script_args.output_dir,
         gradient_accumulation_steps=2,
         num_train_epochs=num_train_epochs,
-        per_device_train_batch_size=16, 
+        per_device_train_batch_size=32, 
         learning_rate=2e-4,
-        logging_steps=100,
+        logging_steps=500,
         save_strategy="epoch",
         eval_strategy="epoch",
         eval_steps=10,
         fp16=True,
         save_total_limit=1,
-        dataloader_num_workers=2,
+        dataloader_num_workers=4,
+        dataloader_pin_memory=True,
         load_best_model_at_end=True,
         lr_scheduler_type="cosine",
         metric_for_best_model="eval_loss",
@@ -528,15 +530,16 @@ if script_args.load_the_saved_model == "False":
                 output_dir=script_args.output_dir,
                 gradient_accumulation_steps=2,
                 num_train_epochs=num_train_epochs,
-                per_device_train_batch_size=16, 
+                per_device_train_batch_size=32, 
                 learning_rate=2e-4,
-                logging_steps=100,
+                logging_steps=500,
                 save_strategy="epoch",
                 eval_strategy="epoch",
                 eval_steps=10,
                 fp16=True,
                 save_total_limit=1,
-                dataloader_num_workers=2,
+                dataloader_num_workers=4,
+                dataloader_pin_memory=True,
                 load_best_model_at_end=True,
                 lr_scheduler_type="cosine",
                 metric_for_best_model="eval_loss",
@@ -883,7 +886,7 @@ if script_args.optimize_model == "True":
     # num_warmup_steps = 200
 
     best_params = {
-        "outer_epochs": 3,
+        "outer_epochs": 20,
         "inner_epochs": 3,
         "momentum": 0.5,
         "learning_rate": 0.01,
@@ -1051,7 +1054,7 @@ if script_args.fuse_model == "True":
     def collate_fn(batch):
         return {k: torch.stack([item[k] for item in batch]) for k in batch[0]}
 
-    data_loader = DataLoader(val_dataset, batch_size=16, collate_fn=collate_fn, num_workers=2)
+    data_loader = DataLoader(val_dataset, batch_size=64, collate_fn=collate_fn, num_workers=4)
 
     # --------- Optimize fusion weights ---------
     init_weights = [0.5, 0.5]
