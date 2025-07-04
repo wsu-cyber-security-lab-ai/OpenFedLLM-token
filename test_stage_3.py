@@ -18,6 +18,7 @@ from transformers import Trainer
 from transformers import EarlyStoppingCallback, IntervalStrategy
 import json
 import re
+import math
 
 # Colored logging setup
 formatter = colorlog.ColoredFormatter(
