@@ -9,7 +9,9 @@ results_csv/
 results_old
 resul*
 logs*/
-xlora/
+local_models*/
+xlora*/
+old*/
 
 evaluation/open_ended/data/*/model_answer/*
 evaluation/open_ended/data/*/model_judgment/*

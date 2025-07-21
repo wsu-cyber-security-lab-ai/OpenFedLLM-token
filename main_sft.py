@@ -432,27 +432,44 @@ def train_stage(
     if training_args.gradient_checkpointing:
         model.enable_input_require_grads()
 
+    num_train_epochs = 30
+
     # SFT Training Arguments
-    sft_args = TrainingArguments(
-        output_dir=script_args.output_dir,
-        gradient_accumulation_steps=2,
-        num_train_epochs=num_train_epochs,
-        per_device_train_batch_size=32, 
-        learning_rate=2e-4,
-        logging_steps=500,
-        save_strategy="epoch",
-        eval_strategy="epoch",
-        eval_steps=10,
-        fp16=True,
-        save_total_limit=1,
-        dataloader_num_workers=4,
-        dataloader_pin_memory=True,
-        load_best_model_at_end=True,
-        lr_scheduler_type="cosine",
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
-        label_names=["labels"]
-    )
+    training_arg = {
+        "output_dir":script_args.output_dir,
+        "gradient_accumulation_steps":2,
+        "num_train_epochs":num_train_epochs,
+        "per_device_train_batch_size":32, 
+        "learning_rate":2e-4,
+        "logging_steps":500,
+        "save_strategy":"epoch",
+        "eval_strategy":"epoch",
+        "eval_steps":10,
+        "fp16":True,
+        "save_total_limit":1,
+        "dataloader_num_workers":4,
+        "dataloader_pin_memory":True,
+        "load_best_model_at_end":True,
+        "lr_scheduler_type":"cosine",
+        "metric_for_best_model":"eval_loss",
+        "greater_is_better":False,
+        "label_names":["labels"],
+        "bf16":False,
+        "report_to":[],
+        "disable_tqdm":True,
+    }
+
+    if stage_idx == 2:
+        training_arg["learning_rate"] = 0.00023
+        training_arg["warmup_ratio"] = 0.1
+        training_arg["weight_decay"] = 0.04
+
+    if stage_idx == 3:
+        training_arg["learning_rate"] = 0.00025
+        training_arg["warmup_ratio"] = 0.15
+        training_arg["weight_decay"] = 0.075
+
+    sft_args = TrainingArguments(**training_arg)
 
     # sft_args = TrainingArguments(
     #     output_dir=script_args.output_dir,
@@ -524,6 +541,7 @@ if script_args.load_the_saved_model == "False":
             current_adapter = model.active_adapter
             print(f"Current active adapter Stage 1: {current_adapter}")
 
+            num_train_epochs=20
 
             # SFT Training Arguments
             sft_args = TrainingArguments(
@@ -531,7 +549,7 @@ if script_args.load_the_saved_model == "False":
                 gradient_accumulation_steps=2,
                 num_train_epochs=num_train_epochs,
                 per_device_train_batch_size=32, 
-                learning_rate=2e-4,
+                learning_rate=0.0005,
                 logging_steps=500,
                 save_strategy="epoch",
                 eval_strategy="epoch",
@@ -544,7 +562,12 @@ if script_args.load_the_saved_model == "False":
                 lr_scheduler_type="cosine",
                 metric_for_best_model="eval_loss",
                 greater_is_better=False,
-                label_names=["labels"]
+                label_names=["labels"],
+                warmup_ratio=0.05,
+                weight_decay=0.06,
+                bf16=False,
+                report_to=[],
+                disable_tqdm=True,
             )
 
             # SFT Trainer (no tokenizer, no dataset_text_field)
@@ -886,14 +909,14 @@ if script_args.optimize_model == "True":
     # num_warmup_steps = 200
 
     best_params = {
-        "outer_epochs": 20,
+        "outer_epochs": 25,
         "inner_epochs": 3,
         "momentum": 0.5,
         "learning_rate": 0.01,
         "max_norm": 0.5,
         "num_warmup_steps": 400,
         "lr": 1e-4,
-        "batch_size": 24,
+        "batch_size": 28,
         "weight_decay": 0.001,
         "beta1": 0.9,
         "beta2": 0.999
@@ -1069,8 +1092,13 @@ if script_args.fuse_model == "True":
         return weights[0] + weights[1] - 1    
 
 
-    lambda_grid = [0.01]
+    lambda_grid = [0.0]
+    lambda_grid = [0.001]
     # lambda_grid = [0.0, 0.001, 0.01, 0.05, 0.1, 0.2]
+
+    # Best lambda_reg: 0.0
+    # Best weights: w1=-0.0913, w2=1.6179
+    # Best validation loss: 0.1970
 
     best_lambda = None
     best_val_loss = float('inf')
@@ -1129,7 +1157,7 @@ from test_datasets import test_stage1, test_stage2, test_stage3
 
 # test_stage1(generator)
 # test_stage2(generator)
-test_stage3(generator, tokenizer, model)
+test_stage3(tokenizer, model)
 
 
 

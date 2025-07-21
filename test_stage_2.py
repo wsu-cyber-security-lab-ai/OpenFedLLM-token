@@ -19,6 +19,8 @@ from transformers import EarlyStoppingCallback, IntervalStrategy
 
 import optuna
 
+from test_datasets import test_stage1, test_stage2, test_stage3
+
 if __name__ == "__main__":
     # Colored logging setup
     formatter = colorlog.ColoredFormatter(
@@ -376,78 +378,8 @@ if __name__ == "__main__":
 
     orginal_dataset = load_dataset("json", data_files="datasets/user_org_question_sft_dataset.jsonl")["train"]
 
-    all_generations = []
-
-    correct_reveal = 0
-    total = 0
-    wrongInstruct = []
-    wrongResponse = []
-    wrongGenerated = []
-
-    for i in range(len(orginal_dataset)):
-    # for i in range(100):
-        instruction = orginal_dataset[i]["instruction"]
-        response = orginal_dataset[i]["response"]
-        true_org = orginal_dataset[i].get("organization", "UnknownOrg")  # Dataset org code
-
-        system_prompt = (
-            "You are a helpful assistant who knows which organization each person belongs"
-        )
-
-        user_prompt = (
-            f"{instruction}"
-        )
-
-        # Full prompt construction
-        formatted_prompt = (
-            f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-            f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
-            "<|im_start|>assistant\n"
-        )
-
-        logger.info("Generating text from the fine-tuned model...")
-
-        outputs = generator(
-            formatted_prompt,
-            max_new_tokens=120,
-            do_sample=False,
-            temperature=0.7,
-            return_full_text=False
-        )
-
-        generated = outputs[0]["generated_text"].strip().split("<|im_end|>")[0].strip()
-
-        is_correct_reveal = (true_org in generated)
-        if is_correct_reveal:
-            correct_reveal += 1
-
-        total += 1
-
-        if is_correct_reveal:
-            print("✅ Correct Organization")
-        else:
-            print("❌ Wrong Organization")
-
-        if not (is_correct_reveal):
-            wrongInstruct.append(instruction)
-            wrongGenerated.append(generated)
-            wrongResponse.append(response)
-
-        all_generations.append(generated)
-
-        print("="*80)
-        print("Instruction:\n", instruction)
-        print("Response:\n", response)
-        print("Generated:\n", generated)
-        print("="*80)
-
-    print(f"Stage 2 Accuracy Should Reveal: {correct_reveal}/{total} = {correct_reveal/total:.2%}")
-
-    # for index, generated in enumerate(wrongGenerated):
-    #     print("Instruction: ", wrongInstruct[index])
-    #     print("Response: ", wrongResponse[index])
-    #     print("Generated: ", generated)
-    #     print()
+    test_stage2(generator)
+    
 
 
 
