@@ -19,6 +19,8 @@ from transformers import EarlyStoppingCallback, IntervalStrategy
 
 import optuna
 
+from test_datasets import test_stage1, test_stage2, test_stage3
+
 if __name__ == "__main__":
     # Colored logging setup
     formatter = colorlog.ColoredFormatter(
@@ -44,11 +46,11 @@ if __name__ == "__main__":
     # MODEL_NAME = "meta-llama/Llama-3.2-1B"
     # SFT_MODEL_NAME = MODEL_NAME.split('/')[1].replace("1B", "1B-SFT")
 
-    # MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
-    # SFT_MODEL_NAME = MODEL_NAME.split('/')[1].replace("Instruct", "ORG-SFT")
-
-    MODEL_NAME = "./Llama-3.2-1B-Instruct"
+    MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
     SFT_MODEL_NAME = MODEL_NAME.split('/')[1].replace("Instruct", "ORG-SFT")
+
+    # MODEL_NAME = "./llama-3-2-1B"
+    # SFT_MODEL_NAME = MODEL_NAME.split('/')[1].replace("Instruct", "ORG-SFT")
 
     print("MODEL_NAME", MODEL_NAME)
     print("SFT_MODEL_NAME", SFT_MODEL_NAME)
@@ -363,84 +365,8 @@ if __name__ == "__main__":
     )
 
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
-
-    all_generations = []
-
-    correct_reveal = 0
-    total = 0
-    wrongInstruct = []
-    wrongResponse = []
-    wrongGenerated = []
-
-    for i in range(len(orginal_dataset)):
-    # for i in range(100):
-        instruction = orginal_dataset[i]["instruction"]
-        response = orginal_dataset[i]["response"]
-        true_org = orginal_dataset[i].get("organization_code", "UnknownOrg")  # Dataset org code
-
-        system_prompt = (
-            "You are a helpful assistant working for a secure organization.\n"
-            "Your task is to provide the correct ORGANIZATION_CODE for any recognized organization when asked.\n"
-            "If the organization is not recognized, respond that you do not have an organization code for it.\n"
-            "Never include any private or personal information in your response—only organization codes."
-        )
-
-        # User prompt includes the user's claimed org code
-        user_prompt = (
-            f"{instruction}"
-        )
-
-        # Full prompt construction
-        formatted_prompt = (
-            f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-            f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
-            "<|im_start|>assistant\n"
-        )
-
-        logger.info("Generating text from the fine-tuned model...")
-
-        outputs = generator(
-            formatted_prompt,
-            max_new_tokens=120,
-            do_sample=False,
-            temperature=0.7,
-            return_full_text=False
-        )
-
-        generated = outputs[0]["generated_text"].strip().split("<|im_end|>")[0].strip()
-
-        is_correct_reveal = (true_org in generated)
-        if is_correct_reveal:
-            correct_reveal += 1
-
-        total += 1
-
-        if is_correct_reveal:
-            print("✅ Correct Code")
-        else:
-            print("❌ Wrong Code")
-
-        if not (is_correct_reveal):
-            wrongInstruct.append(instruction)
-            wrongGenerated.append(generated)
-            wrongResponse.append(response)
-
-        all_generations.append(generated)
-
-        print("="*80)
-        print("Instruction:\n", instruction)
-        print("Response:\n", response)
-        print("Generated:\n", generated)
-        print("="*80)
-
-    print(f"Stage 1 Accuracy Should Reveal: {correct_reveal}/{total} = {correct_reveal/total:.2%}")
-
-    # for index, generated in enumerate(wrongGenerated):
-    #     print("Instruction: ", wrongInstruct[index])
-    #     print("Response: ", wrongResponse[index])
-    #     print("Generated: ", generated)
-    #     print()
-
+    
+    test_stage1(generator)
 
         
 

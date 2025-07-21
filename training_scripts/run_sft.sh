@@ -6,11 +6,11 @@ seq_length=512
 num_clients=10
 sample_clients=10
 lora_r=8
-lora_alpha=32   # twice of lora_r
+lora_alpha=64   # twice of lora_r
 lr=2e-4
 save_model_freq=1
 split_strategy=equal_sequential
-lora_dropout=0.1 
+lora_dropout=0.08 
 target_modules="q_proj k_proj v_proj o_proj gate_proj up_proj down_proj"
 
 local_data_dir="datasets/org_code_dataset.jsonl"       # you may uncomment this line if your data is stored locally and include it in the python command
@@ -25,12 +25,12 @@ gpu=0
 # fed_alg="FedAdam"
 fed_alg="fedavg"
 
-exp_dir="org_code_dataset.jsonl_30000_fedavg_c10s10_i15_b16a1_l512_r8a32_20250701111528"
+exp_dir="org_code_dataset.jsonl_30000_fedavg_c10s10_i15_b16a1_l512_r8a64_20250709110309"
 
 load_the_saved_model="True"
 # load_the_saved_model_dir="./output/${exp_dir}/client_0_sft_personalized_adapter_name"
-load_the_saved_model_dir="./output/${exp_dir}/client_0_personalized_adapter_name"
-# load_the_saved_model_dir="./output/${exp_dir}"
+# load_the_saved_model_dir="./output/${exp_dir}/client_0_personalized_adapter_name"
+load_the_saved_model_dir="./output/${exp_dir}"
 # load_the_saved_model_dir="./output/${exp_dir}/global"
 # load_the_saved_model_dir="./output/${exp_dir}/global_step_0"
 # load_the_saved_model_dir="./output/${exp_dir}/fused_adapter_peft_client_0"
@@ -38,8 +38,8 @@ load_the_saved_model_dir="./output/${exp_dir}/client_0_personalized_adapter_name
 optimize_model="False"
 run_optimize_hyberparameters_tuning="False"
 
-fuse_model="False"
-fuse_model_number=0
+fuse_model="True"
+fuse_model_number=9
 
 CUDA_VISIBLE_DEVICES=$gpu python main_sft.py \
  --learning_rate $lr \
